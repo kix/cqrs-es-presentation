@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Shower Presentation Engine</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="shower/themes/ribbon/styles/styles.css">
+    <link rel="stylesheet" href="styles/github.css">
+    <script src="highlight.pack.js" type="text/javascript"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', (event) => {
+            document.querySelectorAll('pre').forEach((block) => {
+                hljs.highlightBlock(block);
+            });
+        });
+    </script>
+    <style>
+        .shower {
+            --slide-ratio: calc(16 / 9);
+        }
+    </style>
+</head>
+<body class="shower list">
+
+    <header class="caption">
+        <h1>CQRS/ES in Symfony world</h1>
+        <p>Stepan Anchugov, <a href="https://motorsport.com">Motorsport.com</a></p>
+    </header>
+
+    <!--section class="slide" id="cover">
+        <h2>Shower Presentation Engine</h2>
+        <p>Brought to you by <a href="http://pepelsbey.net">Vadim Makeev</a></p>
+        <figure>
+            <img class="cover" src="pictures/cover.jpg" alt="Hands on the orange typewriter in a park">
+            <figcaption class="copyright right white">
+                <a href="http://fiftyfootshadows.net/">© John Carey</a>
+            </figcaption>
+        </figure>
+        <style>
+            #cover h2 {
+                margin: 30px 0 0;
+                color: white;
+                text-align: center;
+                font-size: 70px;
+            }
+
+            #cover p {
+                margin: 10px 0 0;
+                text-align: center;
+                color: white;
+                font-style: italic;
+                font-size: 20px;
+            }
+
+            #cover p a {
+                color: white;
+            }
+        </style>
+    </section-->
+
+<section class="slide">
+    <h2><code>$ whoami</code></h2>
+    <ul>
+        <li>PHP dev since 2010</li>
+        <li>Symfony dev since 2012</li>
+        <li>
+            <a href="https://github.com/kix">
+                Symfony and ecosystem contributor
+            </a>
+        </li>
+        <li>Currently at <a href="https://motorsport.com">Motorsport.com</a></li>
+    </ul>
+</section>
+
+<section class="slide">
+    <h2>Typical MVC:</h2>
+    <pre style="font-size: 12pt;" class="language-php">
+        <code>public function new(Request $request) {</code>
+        <code>    $form = $this->createForm(TaskType::class, new Task());</code>
+        <code></code>
+        <code>    $form->handleRequest($request);</code>
+        <code>    if ($form->isSubmitted() && $form->isValid()) {</code>
+        <code>        $task = $form->getData();</code>
+        <code>        $this->entityManager->persist($task);</code>
+        <code>        $this->entityManager->flush();</code>
+        <code>        return $this->redirectToRoute('task_success');</code>
+        <code>    }</code>
+        <code>    return $this->render('task/new.html.twig', [</code>
+        <code>        'form' => $form->createView(),</code>
+        <code>    ]);</code>
+    </pre>
+</section>
+
+<section class="slide">
+    <h2>Problems:</h2>
+    <ul>
+        <li>Validation, persistence and view output all in the same method</li>
+        <li>Adding stuff complicates everything</li>
+        <li>...and managers want new stuff!</li>
+        <li>MVC paradigm says nothing about controller concern separation</li>
+    </ul>
+</section>
+
+<section class="slide">
+    <h2>Example. OroCRM:</h2>
+    <img style="width: 60%" src="pictures/orocrm.png" alt="OroCRM currently"/>
+</section>
+
+<section class="slide">
+    <h2>Problems</h2>
+    <p>Several layers all in one <em>method</em></p>
+    <ul>
+        <li>Form handling</li>
+        <li>Persistence</li>
+        <li>Business logic</li>
+        <li>Response handling</li>
+        <li>Several <em>HTTP methods</em> in one controller method</li>
+    </ul>
+</section>
+
+<section class="slide">
+    <h2>Enter CQRS</h2>
+    <blockquote>
+        <p>CQRS states that every method should either be a <strong>command</strong> that performs an action, <strong>or a query</strong> that returns data to the caller, but <strong>not both</strong>. In other words, <em>Asking a question should not change the answer</em>. More formally, methods should return a value only if they are referentially transparent and hence possess no side effects.</p>
+    </blockquote>
+    <p>GraphQL is, in fact, inspired by CQRS!</p>
+</section>
+
+<section class="slide">
+    <p><a href="https://martinfowler.com/bliki/CQRS.html" target="_blank">Fowler on CQRS</a></p>
+    <img src="pictures/cqrs-fowler.png" style="width: 60%" alt="">
+</section>
+
+<section class="slide">
+    <h2>Commands:</h2>
+    <pre>
+        <code>class ScheduleRaceCommand {</code>
+        <code>    private EventId $eventId;</code>
+        <code></code>
+        <code>    /** @Assert\GreaterThan("now") */</code>
+        <code>    private DateTime $scheduledDate;</code>
+        <code></code>
+        <code>    public function __construct(EventId $eventId,</code>
+        <code>                    DateTime $scheduledDate) {...}</code>
+        <code>}</code>
+    </pre>
+</section>
+
+<section class="slide">
+    <h2>Command handlers</h2>
+    <pre>
+        <code>class ScheduleRaceHandler {</code>
+        <code>    function __invoke(ScheduleRaceCommand $command): void</code>
+        <code>    {</code>
+        <code>        $entity->reschedule($command->scheduledDate);</code>
+        <code>        $this->repository->persist($entity);</code>
+        <code>    }</code>
+        <code>}</code>
+    </pre>
+</section>
+
+<section class="slide">
+    <h2>Query handlers</h2>
+    <pre>
+        <code>class ListEntitiesHandler {</code>
+        <code>    function __invoke(ListEntitiesQuery $query): array {</code>
+        <code>        return $this->repository->findAllBy($query);</code>
+        <code>    }</code>
+        <code>}</code>
+    </pre>
+</section>
+
+<section class="slide">
+    <h2>GraphQL: better, but still...</h2>
+    <ul>
+        <li>Fits CQRS nicely, but it's up to you to implement
+            <ul>
+                <li>Command === mutation</li>
+                <li>Query === query</li>
+            </ul>
+        </li>
+        <li>Better SOC: mutations VS queries</li>
+        <li>But data probably still is in an ORM, so same dependencies</li>
+        <li>A mutation also runs a query</li>
+        <li>No single opinion on what to return from it</li>        
+    </ul>
+</section>
+
+<section class="slide">
+    <h2>Database?</h2>
+    <div style="width:100%; text-align: center;">
+        <img src="pictures/fowler-cqrs-db.png" style="width:50%" alt="">
+    </div>
+</section>
+
+<section class="slide">
+    <h2>Persistence in ORMs is flawed:</h2>
+    <ul>
+        <li>Audit is as hard as parsing log files.
+            <ul>
+                <li>Oh wait, do you <em>have</em> log files?</li>
+                <li><em>...sufficiently specific log files!</em></li>
+            </ul>
+        </li>
+        <li>Best chance you get an <code>updatedAt</code> field.</li>
+        <li>How do you say who changed what and why?</li>
+        <li><a href="https://github.com/Atlantic18/DoctrineExtensions/blob/v2.4.x/doc/blameable.md" target="_blank">Blameable Doctrine extension</a> helps, but it's cumbersome</li>
+        <li>How do you "undo" an unwanted, but already handled request?</li>
+    </ul>
+</section>
+
+<section class="slide">
+    <h2>Enter Event Sourcing</h2>
+    <p><a href="https://microservices.io/patterns/data/event-sourcing.html" target="_blank">Microservices.io:</a></p>
+    <blockquote>
+        Event sourcing persists the state of a business entity such an Order or a Customer as a 
+        <strong>sequence of state-changing events</strong>. Whenever the state of a business entity 
+        changes, a new event is appended to the list of events. Since saving <strong>an event is</strong>
+        a single operation, it <strong>is inherently atomic</strong>.
+    </blockquote>
+</section>
+
+<section class="slide">
+    <figure>
+        <img class="cover" src="pictures/hickey-perception.jpg">
+        <figcaption style="color: black" class="copyright right white">
+            <a href="https://github.com/matthiasn/talk-transcripts/blob/master/Hickey_Rich/AreWeThereYet.md">© Rich Hickey</a>
+        </figcaption>
+    </figure>
+</section>
+
+<section class="slide">
+    <h2>Are we there yet?</h2>
+    <p>Rich Hickey,&nbsp;<a href="https://github.com/matthiasn/talk-transcripts/blob/master/Hickey_Rich/AreWeThereYet.md"> Are we there yet:</a></p>
+    <blockquote>
+        So we can observe things. And it’s very important that observers are not in the timeline.
+        <br/>
+        The notion of time, it’s only because at one point, we looked at this, another point we looked at that, that we know that there is time. 
+    </blockquote>
+</section>
+
+<section class="slide">
+    <h2>Event</h2>
+    <pre>
+        <code>class RaceRescheduled {</code>
+        <code>    private DateTime $newDateTime;</code>
+        <code></code>
+        <code>    public function __construct(DateTime $newDateTime) {</code>
+        <code>        $this->newDateTime = $newDateTime;</code>
+        <code>    }</code>
+        <code>}</code>
+    </pre>
+</section>
+
+<section class="slide">
+    <h2>Events should be:</h2>
+    <ul>
+        <li>Atomic</li>
+        <li>Non-cancelable</li>
+        <li>Immutable</li>
+        <li>Pure</li>
+    </ul>
+</section>
+
+<section class="slide">
+    <h2>Aggregate root</h2>
+    <pre style="font-size: 16pt;">
+        <code>class Event implements AggregateRoot {</code>
+        <code>    use AggregateRootBehaviour;</code>
+        <code></code>
+        <code>    function apply(RaceRescheduled $event): void {</code>
+        <code>        $this->occursAt = $eventRescheduled->newDateTime();</code>
+        <code>    }</code>
+        <code>    function apply(RaceCanceled $event): void { ... }</code>
+        <code>}</code>
+    </pre>
+</section>
+
+<section class="slide">
+    <h2>Events in a table</h2>
+    <img src="pictures/events-table.png" style="width:100%" alt="">
+</section>
+
+<section class="slide">
+    <h2>Aggregates as business rule guards</h2>
+    <pre>
+        <code>function apply(RaceRescheduled $event): void {</code>
+        <code>    if (count($this->bookings) > 500) {</code>
+        <code>        throw new \Exception('Wou wou palehche');</code>
+        <code>    }</code>
+        <code></code>
+        <code>    $this->occursAt = $eventRescheduled->newDateTime();</code>
+        <code>}</code>
+    </pre>
+</section>
+
+<section class="slide">
+    <h2>Storage</h2>
+    <pre>
+        <code>class RaceScheduleProjector {</code>
+        <code>    function __invoke(RaceRescheduled $event): void {</code>
+        <code>        $this->table->update(</code>
+        <code>            // Data</code>
+        <code>            ['occursAt' => $event->newDateTime()], </code>
+        <code>             // ID</code>
+        <code>            ['id' => $aggregateRootId]</code>
+        <code>        );</code>
+    </pre>
+</section>
+
+<section class="slide">
+    <h2>Storage</h2>
+    <pre>
+        <code>class RaceScheduleSearchProjector {</code>
+        <code>    function __invoke(RaceRescheduled $event): void {</code>
+        <code>        $this->elasticSearch->update(</code>
+        <code>            ['id' => $aggregateRootId, </code>
+        <code>             'occursAt' => $event->newDateTime()]</code>
+        <code>        );</code>
+        <code>    }</code>
+    </pr>
+</section>
+
+<section class="slide">
+    <h2>Reacting to events</h2>
+    <pre>
+        <code>function handle(RaceRescheduled $event): void {</code>
+        <code>    foreach ($attendees as $attendee) {</code>
+        <code>        $this->sendEmail(</code>
+        <code>            RescheduledEmail::fromEvent($event)</code>
+        <code>        );</code>
+        <code>    }</code>
+        <code>}</code>
+    </pre>
+</section>
+
+<section class="slide">
+    <h2>Audit</h2>
+    <pre>
+        <code>function handle(RaceRescheduled $event): void {</code>
+        <code>    $logEntry = new LogEntry(</code>
+        <code>        $this->tokenStorage->getUser(),</code>
+        <code>        $event</code>
+        <code>    );</code>
+        <code>    $this->persist($logEntry);</code>
+        <code>}</code>
+    </pre>
+</section>
+
+<section class="slide">
+    <h2>Great schema of things</h2>
+    
+    <img src="pictures/dzone-cqrs-es.png" style="width: 100%" alt="">
+    <small>Source: <a href="https://dzone.com/articles/microservices-with-cqrs-and-event-sourcing">DZone</a></small>
+</section>
+
+<section class="slide">
+    <h2>Profits</h2>
+    <ul>
+        <li>Easy to reason about</li>
+        <li>Easy to find stuff</li>
+        <li>Easy to separate stuff</li>
+        <li>Event model is easy to grasp</li>
+        <li>Causality as a first-class citizen</li>
+        <li><a href="https://stakeholderwhisperer.com/posts/2014/10/introducing-modelling-by-example" target="_blank">Modeling by example</a></li>
+    </ul>
+</section>
+
+<section class="slide">
+    <h2 style="color: #fff">Event storming</h2>
+    <figure>
+        <img class="cover" style="height:100%" src="pictures/eventstorming-big-picture.jpg" alt="An example session">
+        <figcaption class="copyright right white">
+            <a href="https://dcsg.me/eventstorming/big-picture-workshop-with-eventstorming-at-uniplaces/">Big Picture workshop with EventStorming @ Uniplaces</a>
+        </figcaption>
+    </figure>
+</section>
+
+<section class="slide">
+    <h2>Questions?</h2>
+    <ul>
+        <li>Github: <a href="https://github.com/kix" target="_blank">@kix</a></li>
+        <li>Twitter: <a href="https://twitter.com/_kix" target="_blank">@_kix</a></li>
+    </ul>
+</section>
+
+    <footer class="badge">
+        <a href="https://github.com/shower/shower">Fork me on GitHub</a>
+    </footer>
+
+    <div class="progress"></div>
+
+    <script src="shower/shower.min.js"></script>
+    <!-- Copyright © 3000 Yours Truly, Famous Inc. -->
+
+</body>
+</html>
